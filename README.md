@@ -1,2 +1,2 @@
 # nnlearn
-Learning neural netork tech etc
+Learning neural network tech etc
