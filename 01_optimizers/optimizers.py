@@ -1,8 +1,13 @@
 """First-principles optimizers in NumPy.
 
-Each optimizer holds its own state and exposes a single `step(params, grads)`
-method that returns the next parameter vector. Nothing fancy — the goal is
-clarity, not performance.
+All optimizers share the same update rule:
+
+    params <- params - lr * direction(grads)
+
+Each subclass only has to answer one question: given the current gradient
+(and any state I've accumulated), which direction should I step? That keeps
+the family tree readable — the differences between SGD, Momentum, RMSProp
+and Adam collapse to four short `direction` methods.
 """
 
 from __future__ import annotations
@@ -15,27 +20,29 @@ import numpy as np
 class Optimizer(ABC):
     """Base class for all optimizers.
 
-    An optimizer is a pure state-holding object with one job: given the current
-    `params` and their `grads`, return the updated params. Any running state
-    (velocities, second moments, step counters) lives on the instance and is
-    lazily initialized on the first `step` call so callers don't need to know
-    the parameter shape up front.
+    State (velocities, second moments, step counters) lives on the instance
+    and is lazily initialized on the first `direction` call, so callers don't
+    need to know the parameter shape up front.
     """
 
     lr: float
 
     @abstractmethod
-    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
-        """Return the next parameter vector. Must not mutate `params`."""
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Return the descent direction for this step. May update internal state."""
         ...
+
+    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
+        return params - self.lr * self.direction(grads)
 
 
 class SGD(Optimizer):
     def __init__(self, lr: float = 1e-3):
         self.lr = lr
 
-    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
-        return params - self.lr * grads
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Returns raw grads"""
+        return grads
 
 
 class Momentum(Optimizer):
@@ -46,11 +53,12 @@ class Momentum(Optimizer):
         self.beta = beta
         self.v: np.ndarray | None = None
 
-    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Returns running sum β·v + g"""
         if self.v is None:
-            self.v = np.zeros_like(params)
+            self.v = np.zeros_like(grads)
         self.v = self.beta * self.v + grads
-        return params - self.lr * self.v
+        return self.v
 
 
 class RMSProp(Optimizer):
@@ -60,11 +68,12 @@ class RMSProp(Optimizer):
         self.eps = eps
         self.s: np.ndarray | None = None
 
-    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Returns g / (√s + ε) with EMA of g² """
         if self.s is None:
-            self.s = np.zeros_like(params)
+            self.s = np.zeros_like(grads)
         self.s = self.beta * self.s + (1 - self.beta) * grads * grads
-        return params - self.lr * grads / (np.sqrt(self.s) + self.eps)
+        return grads / (np.sqrt(self.s) + self.eps)
 
 
 class Adam(Optimizer):
@@ -83,14 +92,14 @@ class Adam(Optimizer):
         self.v: np.ndarray | None = None
         self.t = 0
 
-    def step(self, params: np.ndarray, grads: np.ndarray) -> np.ndarray:
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Returns bias-corrected m̂ / (√v̂ + ε)"""
         if self.m is None:
-            self.m = np.zeros_like(params)
-            self.v = np.zeros_like(params)
+            self.m = np.zeros_like(grads)
+            self.v = np.zeros_like(grads)
         self.t += 1
         self.m = self.beta1 * self.m + (1 - self.beta1) * grads
         self.v = self.beta2 * self.v + (1 - self.beta2) * grads * grads
-        # Bias correction.
         m_hat = self.m / (1 - self.beta1**self.t)
         v_hat = self.v / (1 - self.beta2**self.t)
-        return params - self.lr * m_hat / (np.sqrt(v_hat) + self.eps)
+        return m_hat / (np.sqrt(v_hat) + self.eps)
