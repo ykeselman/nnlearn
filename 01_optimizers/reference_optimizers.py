@@ -51,9 +51,14 @@ class Momentum(Optimizer):
     def __init__(self, lr: float = 1e-3, beta: float = 0.9):
         self.lr = lr
         self.beta = beta
+        self.v: np.ndarray | None = None
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        """Returns running sum β·v + g"""
+        if self.v is None:
+            self.v = np.zeros_like(grads)
+        self.v = self.beta * self.v + grads
+        return self.v
 
 
 class RMSProp(Optimizer):
@@ -61,9 +66,14 @@ class RMSProp(Optimizer):
         self.lr = lr
         self.beta = beta
         self.eps = eps
+        self.s: np.ndarray | None = None
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        """Returns g / (√s + ε) with EMA of g² """
+        if self.s is None:
+            self.s = np.zeros_like(grads)
+        self.s = self.beta * self.s + (1 - self.beta) * grads * grads
+        return grads / (np.sqrt(self.s) + self.eps)
 
 
 class Adam(Optimizer):
@@ -78,6 +88,18 @@ class Adam(Optimizer):
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
+        self.m: np.ndarray | None = None
+        self.v: np.ndarray | None = None
+        self.t = 0
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        """Returns bias-corrected m̂ / (√v̂ + ε)"""
+        if self.m is None:
+            self.m = np.zeros_like(grads)
+            self.v = np.zeros_like(grads)
+        self.t += 1
+        self.m = self.beta1 * self.m + (1 - self.beta1) * grads
+        self.v = self.beta2 * self.v + (1 - self.beta2) * grads * grads
+        m_hat = self.m / (1 - self.beta1**self.t)
+        v_hat = self.v / (1 - self.beta2**self.t)
+        return m_hat / (np.sqrt(v_hat) + self.eps)
