@@ -103,3 +103,34 @@ class Adam(Optimizer):
         m_hat = self.m / (1 - self.beta1**self.t)
         v_hat = self.v / (1 - self.beta2**self.t)
         return m_hat / (np.sqrt(v_hat) + self.eps)
+
+
+class MomentumSign(Optimizer):
+    """Soft-sign of an EMA of gradients (per-coordinate "adjusted direction").
+
+    Direction is `m / (|m| + eps)`, applied componentwise. For |m| >> eps this
+    is sign(m), so far from a minimum the update is axis-aligned with bounded
+    step like Lion. As gradients vanish the denominator stops being dominated
+    by |m| and the update collapses to `m / eps` — proportional to m, which
+    drives step size to zero alongside the gradient. That's the same throttle
+    Adam gets from `sqrt(v_hat) + eps`, and it removes the ±lr noise floor
+    that pure `np.sign` left behind, with no lr schedule needed.
+    """
+
+    def __init__(
+        self,
+        lr: float = 1e-3,
+        beta: float = 0.9,
+        eps: float = 1e-8,
+    ):
+        self.lr = lr
+        self.beta = beta
+        self.eps = eps
+        self.m: np.ndarray | None = None
+
+    def direction(self, grads: np.ndarray) -> np.ndarray:
+        """Returns m / (|m| + eps), where m is an EMA of past gradients."""
+        if self.m is None:
+            self.m = np.zeros_like(grads)
+        self.m = self.beta * self.m + (1 - self.beta) * grads
+        return self.m / (np.abs(self.m) + self.eps)

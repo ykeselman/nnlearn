@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 
-from optimizers import SGD, Momentum, RMSProp, Adam
+from reference_optimizers import SGD, Momentum, RMSProp, Adam, MomentumSign
 
 
 A, B = 1.0, 100.0
@@ -54,10 +54,13 @@ def main() -> None:
     # lr Adam prefers, and vice versa. These are hand-tuned to give each
     # method a fair shot from the same starting point.
     runs = {
-        "SGD":      (SGD(lr=1e-3),                        "tab:blue"),
-        "Momentum": (Momentum(lr=1e-3, beta=0.9),         "tab:orange"),
-        "RMSProp":  (RMSProp(lr=1e-2, beta=0.9),          "tab:green"),
-        "Adam":     (Adam(lr=1e-2, beta1=0.9, beta2=0.999), "tab:red"),
+        "SGD":          (SGD(lr=1e-3),                            "tab:blue"),
+        "Momentum":     (Momentum(lr=1e-3, beta=0.9),             "tab:orange"),
+        "RMSProp":      (RMSProp(lr=1e-2, beta=0.9),              "tab:green"),
+        "Adam":         (Adam(lr=1e-2, beta1=0.9, beta2=0.999),   "tab:red"),
+        # Soft sign: m / (|m| + eps). Sign-like far from minima, throttles to
+        # gradient-scaled steps near minima — same trick Adam uses, no lr decay.
+        "MomentumSign": (MomentumSign(lr=3e-3, beta=0.95, eps=1e-8), "tab:purple"),
     }
 
     results = {}
