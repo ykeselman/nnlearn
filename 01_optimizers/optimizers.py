@@ -51,9 +51,13 @@ class Momentum(Optimizer):
     def __init__(self, lr: float = 1e-3, beta: float = 0.9):
         self.lr = lr
         self.beta = beta
+        self.v = None
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        if self.v is None:
+            self.v = np.zeros(grads.shape)
+        self.v = self.beta * self.v + grads
+        return self.v
 
 
 class RMSProp(Optimizer):
