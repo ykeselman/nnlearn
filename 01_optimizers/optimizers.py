@@ -57,6 +57,8 @@ class Momentum(Optimizer):
         if self.v is None:
             self.v = np.zeros(grads.shape)
         self.v = self.beta * self.v + grads
+        # alt with LR = 10*lr:
+        # self.v = self.beta * self.v + (1 - self.beta) * grads
         return self.v
 
 
@@ -65,9 +67,13 @@ class RMSProp(Optimizer):
         self.lr = lr
         self.beta = beta
         self.eps = eps
+        self.G = None
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        if self.G is None:
+            self.G = np.zeros(grads.shape)
+        self.G = self.beta * self.G + (1-self.beta) * grads * grads
+        return grads/(np.sqrt(self.G) + self.eps)
 
 
 class Adam(Optimizer):
@@ -82,6 +88,21 @@ class Adam(Optimizer):
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
+        self.v = None
+        self.G = None
+        self.t = 1
 
     def direction(self, grads: np.ndarray) -> np.ndarray:
-        return grads
+        if self.G is None:
+            self.G = np.zeros(grads.shape)
+            self.v = np.zeros(grads.shape)
+
+        self.v = self.beta1 * self.v + (1-self.beta1) * grads
+        self.G = self.beta2 * self.G + (1-self.beta2) * grads * grads
+
+        v_hat = self.v / (1 - self.beta1**self.t)
+        G_hat = self.G / (1 - self.beta2**self.t)
+
+        self.t += 1
+
+        return v_hat / (np.sqrt(G_hat) + self.eps)
